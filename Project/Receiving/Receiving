@@ -2,12 +2,64 @@
 
 void Main()
 {
+	try
+	{
+		#region driver
+		//Testing
+
+		//NAME: SANIDHYA
+		//SECTION: A01
+
+
+		//1. Selecting all Open Purchase Orders to Receive	
+         GetOutStandingPurchaseOrders().Dump("Outstanding Purchase Order's");
+		//2/ Employee Selecting Purchase Order to receive 
+		 var selectedPID = 350;
+		//3. Details for selected PO or pulled from database 
+		 GetRecieveOrder(selectedPID).Dump();
+		//4. Receiver Entering Received Quantity, QtyReturned and Reason
+		//Create Temporary cart to store items
+		ReceiveOrderView receivedOrder = GetRecieveOrder(selectedPID);
+		//receivedOrder.Dump();
+		//receivedOrder.POItemDetails[2].QtyReceived = 1;
+		//receivedOrder.POItemDetails[0].QtyReceived = 5;
+		//receivedOrder.POItemDetails[1].QtyReturned = 7;
+		//receivedOrder.POItemDetails[1].Reason = "Not-Working";
+
+		
+	    List<UnorderedReturnItemView> unOrderedItemCart = new List<UnorderedReturnItemView>();
+		UnorderedReturnItemView unOrderedItem = new UnorderedReturnItemView();
+		unOrderedItem.Description = "Smart TV's";
+		unOrderedItem.VendorPartNumber = "407-803-1";
+		unOrderedItem.Qty = 4;
+		
+		
+		unOrderedItemCart.Add(unOrderedItem);
+		receivedOrder.UnorderedItems = unOrderedItemCart;
+		
+		
+        receivedOrder.Dump();		
+		//Force CLose Table
+		//ForceCloseOrder("Vendor Cancelled", receivedOrder);
 	
+	}
+	catch (AggregateException ex)
+	{
+		foreach (var error in ex.InnerExceptions)
+		{
+			error.Message.Dump();
+		}
+	}
+#endregion
+	catch (ArgumentNullException ex)
+	{
+		GetInnerException(ex).Message.Dump();
+	}
+	catch (Exception ex)
+	{
+		GetInnerException(ex).Message.Dump();
+	}
 }
-
-//NAME: SANIDHYA
-//SECTION: A01
-
 
 private Exception GetInnerException(Exception ex)
 {
@@ -23,7 +75,6 @@ public List<OutstandingOrderView> GetOutStandingPurchaseOrders()
 	.Where(x => x.OrderDate != null)
 	.Select(x => new OutstandingOrderView
 	{
-		
 		PurchaseOrderID = x.PurchaseOrderID,
 		OrderDate = x.OrderDate,
 		VendorName = x.Vendor.VendorName,
@@ -34,8 +85,8 @@ public List<OutstandingOrderView> GetOutStandingPurchaseOrders()
 public ReceiveOrderView GetRecieveOrder(int OID)
 {
 	return PurchaseOrders
-	.Where(x => x.PurchaseOrderID == OID)
-	.Select(x => new ReceiveOrderView
+	    .Where(x => x.PurchaseOrderID == OID)
+	    .Select(x => new ReceiveOrderView
 	{
 		PurchaseOrderID = x.PurchaseOrderID,
 		OrderDate = x.OrderDate,
@@ -50,59 +101,49 @@ public ReceiveOrderView GetRecieveOrder(int OID)
 						Province = y.ProvinceID,
 						VendorPhone = y.Phone
 					  }).FirstOrDefault(),
-		ItemDetails = PurchaseOrderDetails
+		POItemDetails = PurchaseOrderDetails
 					  .Where(x => x.PurchaseOrderID == OID)
 					  .Select(x => new ItemView
 					  {
 					    StockItemID = x.StockItem.StockItemID,
 						StockItemDescription = x.StockItem.Description,
 						QtyOnOrder = x.Quantity,
-						QtyOutstanding = x.ReceiveOrderDetails.Count() == 0 ? x.Quantity : x.Quantity - x.ReceiveOrderDetails.Sum(y => y.QuantityReceived)
+						QtyOutstanding = x.ReceiveOrderDetails.Count() == 0 ? x.Quantity : x.Quantity - x.ReceiveOrderDetails.Sum(y => y.QuantityReceived),
+				       
+				
 					  }).ToList()
 	}).FirstOrDefault();
 }
 
 
-public List<UnorderedReturnItemView> GetUnorderedItems()
+public ReceiveOrderView ProcessReceiveOrder(ReceiveOrderView orderView)
 {
-	return null;
-}
-
-public ReceiveOrderView ProcessReceiveOrder(ReceiveOrderView OrderView)
-{
-	#region Process
+	#region Variables
+	ReceiveOrders receivedOrders = ReceiveOrders  .Where(x => x.PurchaseOrderID == orderView.PurchaseOrderID)
+									.FirstOrDefault();
+    List<PurchaseOrderDetails> SystemOrder = PurchaseOrderDetails .Where(x => x.PurchaseOrderID == orderView.PurchaseOrderID)
+	.ToList();
 	
-	 ReceiveOrders ReceiveOrder = ReceiveOrders
-	.Where(x => x.PurchaseOrderID == OrderView.PurchaseOrderID).FirstOrDefault();
-	List<PurchaseOrderDetails> Oorder = PurchaseOrderDetails
-	.Where(z=> z.PurchaseOrderID == OrderView.PurchaseOrderID).ToList();
-	PurchaseOrders MainPO = PurchaseOrders
-	.Where(x => x.PurchaseOrderID == OrderView.PurchaseOrderID).FirstOrDefault();
-    #endregion
+	PurchaseOrders originalPO = PurchaseOrders .Where(x => x.PurchaseOrderID == orderView.PurchaseOrderID)
+									.FirstOrDefault();
+	#endregion
 
-	#region Error Checking
+	#region checkingErrors
 
 	List<Exception> errorList = new List<Exception>();
 
-
-
-	//Supplying Recieving Order
-	if (OrderView.ItemDetails.Count() == 0)
+	//Receiving Order is supplied
+	if (orderView == null)
 	{
-		errorList.Add(new Exception("items Must be provided for the order"));
+		throw new ArgumentNullException("Order's Must be supplied");
 	}
-
-	if (OrderView == null)
+	if (orderView.POItemDetails.Count() == 0)
 	{
-		throw new ArgumentNullException("Order Must be Supplied");
-	}
-	if (Oorder == null)
-	{
-		throw new ArgumentNullException("Order does not exist in the system");
+		errorList.Add(new Exception("No items provided for the order"));
 	}
 	else
 	{
-		foreach (var item in OrderView.ItemDetails)
+		foreach (var item in orderView.POItemDetails)
 		{
 			if (item.QtyReceived < 0 || item.QtyReceived > item.QtyOutstanding)
 			{
@@ -114,62 +155,122 @@ public ReceiveOrderView ProcessReceiveOrder(ReceiveOrderView OrderView)
 			}
 			if (String.IsNullOrWhiteSpace(item.Reason) && item.QtyReturned > 0)
 			{
-				errorList.Add(new Exception("Must provide a reason for return"));
+				errorList.Add(new Exception("Reason Must be Provided for return"));
 			}
 		}
 	}
 	#endregion
 
 	#region Processing
-	//Update QtyOutstanding, QuantityOnHand
-	foreach (var item in OrderView.ItemDetails)
+	//Update OutstandingQty , QuantityOnHand
+	foreach (var item in orderView.POItemDetails)
 	{
-		Oorder.Where(s => s.StockItemID == item.StockItemID).FirstOrDefault().Quantity -= item.QtyReceived;
-		StockItems sysItem = StockItems
-							.Where(si => si.StockItemID == item.StockItemID).FirstOrDefault();
-		sysItem.QuantityOnHand += item.QtyReceived;
-		sysItem.QuantityOnOrder -= item.QtyReceived;
+		SystemOrder.Where(s => s.StockItemID == item.StockItemID).FirstOrDefault().Quantity -= item.QtyReceived;
+		StockItems SystemItem = StockItems .Where(si => si.StockItemID == item.StockItemID).FirstOrDefault();
+		SystemItem.QuantityOnHand += item.QtyReceived;
+		SystemItem.QuantityOnOrder -= item.QtyReceived;
 
 
 		//Create ReturnOrderDetail for returned Items
 		if (item.QtyReturned > 0)
 		{
-			ReturnedOrderDetailView returnItem = new ReturnedOrderDetailView();
-			returnItem.PurchaseOrderDetailID = item.PurchaseOrderDetailID;
-			returnItem.UnOrderedItemID = item.StockItemID;
-			returnItem.Quantity = item.QtyReturned;
-			returnItem.Reason = item.Reason;
-			returnItem.VendorPartNumber = sysItem.VendorStockNumber;
+			ReturnedOrderDetailView returnedItem = new ReturnedOrderDetailView();
+			returnedItem.PurchaseOrderDetailID = item.PurchaseOrderDetailID;
+			returnedItem.UnOrderedItemID = item.StockItemID;
+			returnedItem.Quantity = item.QtyReturned;
+			returnedItem.Reason = item.Reason;
+			returnedItem.VendorPartNumber = SystemItem.VendorStockNumber;
 		}
 
-		//Create UnReturnOrderDetail for Unordered Items
-		foreach (var unOrderedItem in OrderView.UnorderedItems)
+	    //Create UnReturnOrderDetail for Unordered Items
+		foreach (var unOrderedItem in orderView.UnorderedItems)
 		{
-			ReturnedOrderDetails newUnorderedItem = new ReturnedOrderDetails();
-			newUnorderedItem.ItemDescription = unOrderedItem.Description;
-			newUnorderedItem.Quantity = unOrderedItem.Qty;
-			newUnorderedItem.VendorStockNumber = unOrderedItem.VendorPartNumber;
-			newUnorderedItem.Reason = "Not ordered";
-			ReturnedOrderDetails.Add(newUnorderedItem);
+			ReturnedOrderDetails NUnorderedItem = new ReturnedOrderDetails();
+			NUnorderedItem.ItemDescription = unOrderedItem.Description;
+			NUnorderedItem.Quantity = unOrderedItem.Qty;
+			NUnorderedItem.VendorStockNumber = unOrderedItem.VendorPartNumber;
+			NUnorderedItem.Reason = "Not-ordered";
 		}
 	}
-    #endregion
-	
-	
-	
-	if (Oorder.Sum(o => o.Quantity) == 0)
-	{
-		OrderView.CanBeClosed = true;
-		MainPO.Closed = true;
-	}
+
+	#endregion
+
+	//Updating status if PO is able to be closed
 	if (errorList.Count > 0)
 	{
 		throw new AggregateException(errorList);
 	}
-	return GetRecieveOrder(OrderView.PurchaseOrderID);
+	
+	if (SystemOrder.Sum(o => o.Quantity) == 0)
+	{
+		orderView.CanBeClosed = true;
+		originalPO.Closed = true;
+	}
+
+	return GetRecieveOrder(orderView.PurchaseOrderID);
+}
+
+public void ForceCloseOrder(string reason, ReceiveOrderView receiving)
+{
+	#region Local Variables
+	PurchaseOrders purchaseOrder = PurchaseOrders .Where(x=> x.PurchaseOrderID == receiving.PurchaseOrderID) .FirstOrDefault();
+	List<PurchaseOrderDetails> purchaseOrderDetail = PurchaseOrderDetails .Where(x => x.PurchaseOrderID == receiving.PurchaseOrderID) .ToList();
+	List<Exception> errorList = new List<Exception>();
+	#endregion
+
+	#region Error Checking
+	if (purchaseOrder == null)
+	{
+		errorList.Add(new Exception("Purchase Order doesn't exist"));
+	}
+	if (String.IsNullOrWhiteSpace(reason))
+	{
+		errorList.Add(new Exception("Must provide a reason for Force Close"));
+
+	}
+	#endregion
+
+	#region Processing
+	receiving.Dump("Before");
+	
+	
+	//Updating PO to be close
+	purchaseOrder.Closed = true;
+	purchaseOrder.Notes = reason;
+
+	//Updating PurchaseOrderDetails, StockItems
+	foreach (var item in receiving.POItemDetails)
+	{
+		purchaseOrderDetail.Where(y => y.StockItemID == item.StockItemID).FirstOrDefault().Quantity -= item.QtyOnOrder;
+		StockItems systemItem = StockItems .Where(y => y.StockItemID == item.StockItemID).FirstOrDefault();
+		systemItem.QuantityOnOrder -= item.QtyReceived;
+	}
+	#endregion
+
+	StockItems.Where(si => si.StockItemID == 45).Dump();
+	purchaseOrder.Dump("After");
+	#region Save Changes
+	if (errorList.Count() > 0)
+	{
+		throw new AggregateException(errorList);
+	}	
+	#endregion
+}
+
+public void AddUnorderedItem(UnorderedReturnItemView item, int? poID)
+{
 
 }
 
+public void RemoveUnorderedItem(int? itemID)
+{
+
+}
+
+public List<UnorderedReturnItemView> GetUnorderedItems()
+{
+	return null;
+}
 
 #region ViewModels
 
@@ -225,7 +326,7 @@ public class ReceiveOrderView
 	public DateTime? OrderDate { get; set; }
 	public bool CanBeClosed { get; set; }
 	public VendorView Vendor { get; set; }
-	public List<ItemView> ItemDetails { get; set; }
+	public List<ItemView> POItemDetails { get; set; }
 	public List<UnorderedReturnItemView> UnorderedItems { get; set; }
 }
 
