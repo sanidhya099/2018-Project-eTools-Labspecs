@@ -6,6 +6,16 @@ void Main()
 	#region Driver
 	try
 	{
+	//1. Getting VEndors 
+	   GetVendors();
+	//2. Getting employee by employeeID
+	   GetEmployee(1);
+	//3.Getting vendor purchase order using vendprID
+	   GetVendorPurchaseOrder(1);
+	//4. Fetching Inventory by |   VendorID
+	   FetchInventoryBy(1);
+	//5. Fetching Inventory By purchaseOrderID and VendorID 
+	   FetchInventoryBy(358 , 1);	
 	}
 	#endregion
 	#region catch all exceptions 
@@ -108,6 +118,7 @@ public PurchaseOrderView GetVendorPurchaseOrder(int vendorID)
 								.Where(i => i.VendorID == x.VendorID)
 								.Select(i => new ItemView
 								{
+								
 									StockItemID = i.StockItemID,
 									Description = i.Description,
 									QOH = i.QuantityOnHand,
@@ -188,11 +199,6 @@ public PurchaseOrderView UpdatePurchaseOrder(PurchaseOrderEditView order, bool p
 			GST = existingOrder.TaxAmount
 		};
  
-		if (placeOrder == true)
-		{
-			SaveChanges();
-		}
- 
 		return updatedOrderView;
 	}
 	else
@@ -209,7 +215,6 @@ public bool DeletePurchaseOrder(int purchaseOrderID)
  
 	if (deletePurchaseOrder != null)
 	{
-		PurchaseOrders.Remove(deletePurchaseOrder);
 		Console.WriteLine($"Purchase order #{purchaseOrderID} is deleted from database.");
 		return true;
 	}
@@ -278,5 +283,5 @@ public class ItemDetailView
 	public int QTO { get; set; }
 	public decimal Price { get; set; }
 }
- 
+
 #endregion
