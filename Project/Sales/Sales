@@ -1,0 +1,114 @@
+void Main()
+{
+GetCategories().Dump();
+GetItemsByCategoryID(5).Dump();
+}
+
+public List<CategoryView> GetCategories()
+{
+return Categories
+.Select(x => new CategoryView
+{
+CategoryID = x.CategoryID,
+Description = x.Description,
+StockItemCount = x.StockItems.Count()
+}).ToList();
+}
+
+public List<StockItemView> GetItemsByCategoryID(int categoryid)
+{
+
+
+return StockItems
+.Where(x => x.CategoryID == 5)
+.OrderBy(x => x.Description)
+.Select(x => new StockItemView
+{
+StockItemID = x.StockItemID,
+SellingPrice = x.SellingPrice,
+Description = x.Description,
+QuantityOnHand = x.QuantityOnHand
+}).ToList();
+}
+
+public int SaveSales(SaleView sale)
+{
+return Sales
+.Where(x => x.SaleID == saleID)
+.Select(x => new ReturnSaleView
+{
+SaleID = x.SaleID,
+EmployeeID = x.EmployeeID,
+TaxAmount = x.TaxAmount,
+SubTotal = x.SubTotal,
+CouponID = x.CouponID ?? 0,
+ReturnSaleDetails = x.SaleDetails
+.Select(a => new ReturnSaleDetailCartView
+{
+StockItemID = a.StockItemID,
+Description = a.StockItem.Description,
+OrginialQty = a.Quantity,
+SellingPrice = a.SellingPrice,
+})
+.ToList()
+})
+.FirstOrDefault();
+}
+}
+/*public ReturnSaleView GetSaleRefund(int saleID)
+{
+
+}
+public int SaveRefund(ReturnSaleView refundSale)
+{
+
+}*/
+public class CategoryView
+{
+public int CategoryID { get; set; }
+public string Description { get; set; }
+public int StockItemCount { get; set; }
+}
+
+public class StockItemView
+{
+public int StockItemID { get; set; }
+public decimal SellingPrice { get; set; }
+public string Description { get; set; }
+public int QuantityOnHand { get; set; }
+}
+
+public class ShoppingCartView
+{
+public int StockItemID { get; set; }
+public string Description { get; set; }
+public int Quantity { get; set; }
+}
+public class SaleView
+{
+public int SaleID { get; set; }
+public int EmployeeID { get; set; }
+public string PaymentType { get; set; }
+public decimal TaxAmount { get; set; }
+public decimal SubTotal { get; set; }
+public int CouponID { get; set; }
+}
+
+public class ReturnSaleView
+{
+public int SaleID { get; set; }
+public int EmployeeID { get; set; }
+public decimal TaxAmount { get; set; }
+public decimal SubTotal { get; set; }
+public int CouponID { get; set; }
+public List<ReturnSaleDetailCartView> ReturnSaleDetails { get; set; }
+}
+public class ReturnSaleDetailCartView
+{
+public int StockItemID { get; set; }
+public string Description { get; set; }
+public int OrginialQty { get; set; }
+public decimal SellingPrice { get; set; }
+public int PreviouReturnQty { get; set; }
+public int QtyReturnNow { get; set; }
+}

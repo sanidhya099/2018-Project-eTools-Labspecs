@@ -1,0 +1,241 @@
+
+
+void Main()
+{
+	
+}
+
+//NAME: SANIDHYA
+//SECTION: A01
+
+
+private Exception GetInnerException(Exception ex)
+{
+	while (ex.InnerException != null)
+		ex = ex.InnerException;
+	return ex;
+}
+
+public List<OutstandingOrderView> GetOutStandingPurchaseOrders()
+{
+	return PurchaseOrders
+	.Where(x => x.Closed == false)
+	.Where(x => x.OrderDate != null)
+	.Select(x => new OutstandingOrderView
+	{
+		
+		PurchaseOrderID = x.PurchaseOrderID,
+		OrderDate = x.OrderDate,
+		VendorName = x.Vendor.VendorName,
+		VendorPhone = x.Vendor.Phone
+	}).ToList();
+}
+
+public ReceiveOrderView GetRecieveOrder(int OID)
+{
+	return PurchaseOrders
+	.Where(x => x.PurchaseOrderID == OID)
+	.Select(x => new ReceiveOrderView
+	{
+		PurchaseOrderID = x.PurchaseOrderID,
+		OrderDate = x.OrderDate,
+		Vendor = Vendors
+		              .Where(y => x.VendorID == y.VendorID)
+					  .Select(y => new  VendorView
+					  {
+					    VendorName = y.VendorName,
+						Address = y.Address,
+						City = y.City,
+						PostalCode = y.PostalCode,
+						Province = y.ProvinceID,
+						VendorPhone = y.Phone
+					  }).FirstOrDefault(),
+		ItemDetails = PurchaseOrderDetails
+					  .Where(x => x.PurchaseOrderID == OID)
+					  .Select(x => new ItemView
+					  {
+					    StockItemID = x.StockItem.StockItemID,
+						StockItemDescription = x.StockItem.Description,
+						QtyOnOrder = x.Quantity,
+						QtyOutstanding = x.ReceiveOrderDetails.Count() == 0 ? x.Quantity : x.Quantity - x.ReceiveOrderDetails.Sum(y => y.QuantityReceived)
+					  }).ToList()
+	}).FirstOrDefault();
+}
+
+
+public List<UnorderedReturnItemView> GetUnorderedItems()
+{
+	return null;
+}
+
+public ReceiveOrderView ProcessReceiveOrder(ReceiveOrderView OrderView)
+{
+	#region Process
+	
+	 ReceiveOrders ReceiveOrder = ReceiveOrders
+	.Where(x => x.PurchaseOrderID == OrderView.PurchaseOrderID).FirstOrDefault();
+	List<PurchaseOrderDetails> Oorder = PurchaseOrderDetails
+	.Where(z=> z.PurchaseOrderID == OrderView.PurchaseOrderID).ToList();
+	PurchaseOrders MainPO = PurchaseOrders
+	.Where(x => x.PurchaseOrderID == OrderView.PurchaseOrderID).FirstOrDefault();
+    #endregion
+
+	#region Error Checking
+
+	List<Exception> errorList = new List<Exception>();
+
+
+
+	//Supplying Recieving Order
+	if (OrderView.ItemDetails.Count() == 0)
+	{
+		errorList.Add(new Exception("items Must be provided for the order"));
+	}
+
+	if (OrderView == null)
+	{
+		throw new ArgumentNullException("Order Must be Supplied");
+	}
+	if (Oorder == null)
+	{
+		throw new ArgumentNullException("Order does not exist in the system");
+	}
+	else
+	{
+		foreach (var item in OrderView.ItemDetails)
+		{
+			if (item.QtyReceived < 0 || item.QtyReceived > item.QtyOutstanding)
+			{
+				errorList.Add(new Exception("Quantity to receive must be a positive integer no greater than the outstanding amount"));
+			}
+			if (item.QtyReturned < 0 || item.QtyReturned > item.QtyOutstanding)
+			{
+				errorList.Add(new Exception("Quantity to return must be a positive integer no greater than the outstanding amount"));
+			}
+			if (String.IsNullOrWhiteSpace(item.Reason) && item.QtyReturned > 0)
+			{
+				errorList.Add(new Exception("Must provide a reason for return"));
+			}
+		}
+	}
+	#endregion
+
+	#region Processing
+	//Update QtyOutstanding, QuantityOnHand
+	foreach (var item in OrderView.ItemDetails)
+	{
+		Oorder.Where(s => s.StockItemID == item.StockItemID).FirstOrDefault().Quantity -= item.QtyReceived;
+		StockItems sysItem = StockItems
+							.Where(si => si.StockItemID == item.StockItemID).FirstOrDefault();
+		sysItem.QuantityOnHand += item.QtyReceived;
+		sysItem.QuantityOnOrder -= item.QtyReceived;
+
+
+		//Create ReturnOrderDetail for returned Items
+		if (item.QtyReturned > 0)
+		{
+			ReturnedOrderDetailView returnItem = new ReturnedOrderDetailView();
+			returnItem.PurchaseOrderDetailID = item.PurchaseOrderDetailID;
+			returnItem.UnOrderedItemID = item.StockItemID;
+			returnItem.Quantity = item.QtyReturned;
+			returnItem.Reason = item.Reason;
+			returnItem.VendorPartNumber = sysItem.VendorStockNumber;
+		}
+
+		//Create UnReturnOrderDetail for Unordered Items
+		foreach (var unOrderedItem in OrderView.UnorderedItems)
+		{
+			ReturnedOrderDetails newUnorderedItem = new ReturnedOrderDetails();
+			newUnorderedItem.ItemDescription = unOrderedItem.Description;
+			newUnorderedItem.Quantity = unOrderedItem.Qty;
+			newUnorderedItem.VendorStockNumber = unOrderedItem.VendorPartNumber;
+			newUnorderedItem.Reason = "Not ordered";
+			ReturnedOrderDetails.Add(newUnorderedItem);
+		}
+	}
+    #endregion
+	
+	
+	
+	if (Oorder.Sum(o => o.Quantity) == 0)
+	{
+		OrderView.CanBeClosed = true;
+		MainPO.Closed = true;
+	}
+	if (errorList.Count > 0)
+	{
+		throw new AggregateException(errorList);
+	}
+	return GetRecieveOrder(OrderView.PurchaseOrderID);
+
+}
+
+
+#region ViewModels
+
+public class UnorderedReturnItemView
+{
+	public int? PurchaseOrderID { get; set; }
+	public int ItemID { get; set; }
+	public string Description { get; set; }
+	public string VendorPartNumber { get; set; }
+	public int Qty { get; set; }
+	public bool RemoveFromViewFlag { get; set; }
+}
+
+public class ReturnedOrderDetailView
+{
+	public int ReturnedOrderDetailID { get; set; }
+	public int ReceiveOrderID { get; set; }
+	public int PurchaseOrderDetailID { get; set; }
+	public int UnOrderedItemID { get; set; }
+	public string ItemDescription { get; set; }
+	public int Quantity { get; set; }
+	public string Reason { get; set; }
+	public string VendorPartNumber { get; set; }
+	public bool RemoveFromViewFlag { get; set; }
+}
+
+public class ItemView
+{
+	public int PurchaseOrderDetailID { get; set; }
+	public int StockItemID { get; set; }
+	public string StockItemDescription { get; set; }
+	public int QtyOnOrder { get; set; }
+	public int QtyOutstanding { get; set; }
+	public int QtyReceived { get; set; }
+	public int QtyReturned { get; set; }
+	public string Reason { get; set; }
+}
+
+public class VendorView
+{
+	public string VendorName { get; set; }
+	public string Address { get; set; }
+	public string City { get; set; }
+	public string Province { get; set; }
+	public string PostalCode { get; set; }
+	public string VendorPhone { get; set; }
+}
+
+
+public class ReceiveOrderView
+{
+	public int PurchaseOrderID { get; set; }
+	public DateTime? OrderDate { get; set; }
+	public bool CanBeClosed { get; set; }
+	public VendorView Vendor { get; set; }
+	public List<ItemView> ItemDetails { get; set; }
+	public List<UnorderedReturnItemView> UnorderedItems { get; set; }
+}
+
+public class OutstandingOrderView
+{
+	public int PurchaseOrderID { get; set; }
+	public DateTime? OrderDate { get; set; }
+	public string VendorName { get; set; }
+	public string VendorPhone { get; set; }
+}
+
+#endregion
+// You can define other methods, fields, classes and namespaces here

@@ -1,0 +1,228 @@
+void Main()
+{
+GetCustomers().Dump();
+}
+
+// You can define other methods, fields, classes and namespaces here
+// Verify the GetCustomerByPhone method retrieves the correct customer information.
+#region Methods
+
+public CustomerView GetCustomerByPhone(string phone)
+{
+return Customers
+
+.Where(x => x.ContactPhone == "589.428.6764")
+.Select(x => new CustomerView
+{
+CustomerID = x.CustomerID,
+LastName = x.LastName,
+FirstName = x.FirstName,
+Address = x.Address,
+RentalID = x.Rentals.OrderByDescending(r => r.RentalDateOut).FirstOrDefault().RentalID
+})
+.FirstOrDefault();
+
+
+}
+
+#endregion
+
+
+//Check that the GetEquipments method lists all available equipment for rent.
+public List<AvailableEquipmentView> GetEquipments()
+{
+var equipmentList = RentalEquipments
+.OrderBy(x => x.Description)
+.Select(x => new AvailableEquipmentView
+{
+RentalEquipmentID = x.RentalEquipmentID,
+Description = x.Description,
+SerialNumber = x.SerialNumber,
+DailyRate = x.DailyRate,
+Condition = x.Condition
+})
+.GroupBy(x => x.Description) 
+.Select(group => group.First()) 
+.ToList();
+
+return equipmentList;
+}
+
+
+//Confirm the GetCoupon method accurately retrieves the correct discount value.
+public decimal GetCoupon(string couponCode)
+{
+// Assuming Coupons is a collection or DbSet<Coupon>
+var coupon = Coupons.FirstOrDefault(c => c.CouponIDValue == "Joy23");
+
+if (coupon != null)
+{
+return coupon.CouponID;
+}
+else
+{
+throw new Exception($"Coupon with code '{couponCode}' not found.");
+}
+}
+
+//public RentalsView Rent(RentalsView rental)
+//{
+// 
+//}
+
+public RentalsView GetRentalByRentalNumber(int rentalid)
+{
+var rental = Rentals
+.Where(x => x.RentalID == 4)
+.Select(x => new RentalsView
+{
+RentalID = x.RentalID,
+CustomerID = x.CustomerID,
+EmployeeID = x.EmployeeID,
+CouponID = Convert.ToInt32(x.CouponID),
+SubTotal = x.SubTotal,
+TaxAmount = x.TaxAmount,
+RentalDateOut = x.RentalDateOut,
+RentalDateIn = x.RentalDateIn,
+PaymentType = x.PaymentType,
+RentalDetails = RentalDetails
+.Where(rd => rd.RentalID == 4)
+.Select(r => new RentalDetailView
+{
+RentalDetailID = r.RentalDetailID,
+RentalID = r.RentalID,
+RentalEquipmentID = r.RentalEquipmentID,
+RentalDays = r.RentalDays,
+RentalRate = r.RentalRate,
+OutCondition = r.OutCondition,
+InCondition = r.InCondition,
+DamageRepairCost = r.DamageRepairCost
+})
+.ToList()
+})
+.FirstOrDefault();
+
+return rental;
+}
+
+
+public List<RentalsView> GetRentalByPhone(string phone)
+{
+var rentals = Rentals
+.Where(x => x.Customer.ContactPhone == "589.428.6764")
+.Select(x => new RentalsView
+{
+RentalID = x.RentalID,
+CustomerID = x.CustomerID,
+EmployeeID = x.EmployeeID,
+CouponID = Convert.ToInt32(x.CouponID),
+SubTotal = x.SubTotal,
+TaxAmount = x.TaxAmount,
+RentalDateOut = x.RentalDateOut,
+RentalDateIn = x.RentalDateIn,
+PaymentType = x.PaymentType,
+RentalDetails = RentalDetails
+.Where(rd => rd.RentalID == 1)
+.Select(r => new RentalDetailView
+{
+RentalDetailID = r.RentalDetailID,
+RentalID = r.RentalID,
+RentalEquipmentID = r.RentalEquipmentID,
+RentalDays = r.RentalDays,
+RentalRate = r.RentalRate,
+OutCondition = r.OutCondition,
+InCondition = r.InCondition,
+DamageRepairCost = r.DamageRepairCost
+})
+.ToList()
+})
+.ToList();
+
+return rentals;
+}
+
+public List<RentalsView> SelectRentalByCustomer(int customerID)
+{
+var rentals = Rentals
+.Where(x => x.Customer.CustomerID == 35)
+.Select(x => new RentalsView
+{
+RentalID = x.RentalID,
+CustomerID = x.CustomerID,
+EmployeeID = x.EmployeeID,
+CouponID = Convert.ToInt32(x.CouponID),
+SubTotal = x.SubTotal,
+TaxAmount = x.TaxAmount,
+RentalDateOut = x.RentalDateOut,
+RentalDateIn = x.RentalDateIn,
+PaymentType = x.PaymentType,
+RentalDetails = RentalDetails
+.Where(rd => rd.RentalID == 1)
+.Select(r => new RentalDetailView
+{
+RentalDetailID = r.RentalDetailID,
+RentalID = r.RentalID,
+RentalEquipmentID = r.RentalEquipmentID,
+RentalDays = r.RentalDays,
+RentalRate = r.RentalRate,
+OutCondition = r.OutCondition,
+InCondition = r.InCondition,
+DamageRepairCost = r.DamageRepairCost
+})
+.ToList()
+})
+.ToList();
+
+return rentals;
+}
+
+
+//public RentalsView Return(RentalView rental)
+//{
+// 
+//}
+
+
+public class CustomerView
+{
+public int CustomerID { get; set; }
+public string LastName { get; set; }
+public string FirstName { get; set; }
+public string Address { get; set; }
+public int RentalID { get; set; }
+}
+
+public class AvailableEquipmentView
+{
+public int RentalEquipmentID { get; set;}
+public string Description {get; set;}
+public string SerialNumber {get; set;}
+public decimal DailyRate {get; set;}
+public string Condition {get; set;}
+}
+
+public class RentalsView
+{
+public int RentalID { get; set; }
+public int CustomerID {get; set;}
+public int EmployeeID {get; set;}
+public int CouponID {get; set;}
+public decimal SubTotal {get; set;}
+public decimal TaxAmount {get; set;}
+public DateTime RentalDateOut {get; set;}
+public DateTime RentalDateIn {get; set;}
+public string PaymentType {get; set;}
+public List<RentalDetailView> RentalDetails { get; set;}
+}
+
+public class RentalDetailView 
+{
+public int RentalDetailID { get; set;}
+public int RentalID { get; set; }
+public int RentalEquipmentID {get; set;}
+public decimal RentalDays {get; set;}
+public decimal RentalRate {get; set;}
+public string OutCondition {get; set;}
+public string InCondition {get; set;}
+public decimal DamageRepairCost {get; set;}
+}

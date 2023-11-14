@@ -1,0 +1,282 @@
+void Main()
+{
+	// Name - Raghav Mahajan
+    // Team -  02 - Purchase Order
+ 
+	#region Driver
+	try
+	{
+	}
+	#endregion
+	#region catch all exceptions 
+	catch (AggregateException ex)
+	{
+		foreach (var error in ex.InnerExceptions)
+		{
+			error.Message.Dump();
+		}
+	}
+	catch (ArgumentNullException ex)
+	{
+		GetInnerException(ex).Message.Dump();
+	}
+	catch (Exception ex)
+	{
+		GetInnerException(ex).Message.Dump();
+	}
+	#endregion
+}
+ 
+private Exception GetInnerException(Exception ex)
+{
+	while (ex.InnerException != null)
+		ex = ex.InnerException;
+	return ex;
+}
+ 
+#region Methods
+ 
+public EmployeeView GetEmployee(int employeeID)
+{
+	if (employeeID == 0)
+	{
+		throw new ArgumentNullException("Enter an Employee ID");
+	}
+	return Employees
+				.Where(x => x.EmployeeID == employeeID)
+				.Select(x => new EmployeeView
+				{
+					EmployeeID = x.EmployeeID,					
+					FullName = x.FirstName + " " + x.LastName
+				}).FirstOrDefault().Dump();
+}
+ 
+public List<VendorView> GetVendors()
+{	
+	List<VendorView> getVendorsList = Vendors
+										.Where(x => x.RemoveFromViewFlag == false)
+										.Select(x => new VendorView
+										{
+											VendorID = x.VendorID,
+											VendorName = x.VendorName,
+											Phone = x.Phone,
+											Address = x.Address,
+											City = x.City,
+											Province = x.ProvinceID,
+											PostalCode = x.PostalCode
+										}).ToList();
+	List<Exception> errorList = new List<Exception>();
+	if(getVendorsList == null)
+	{
+		errorList.Add(new Exception("Vendor list is either unavailable or it does not exist"));
+	}
+ 
+	if (errorList.Count() > 0)
+	{
+		throw new AggregateException("Can not proceed, please check again", errorList);
+	}
+ 
+	return  getVendorsList.Dump();									
+}
+ 
+ 
+public PurchaseOrderView GetVendorPurchaseOrder(int vendorID)
+{
+	if (vendorID == 0)
+	{
+		throw new ArgumentNullException("Vendor Id is required");
+	}
+ 
+	return PurchaseOrders
+				.Where(x => x.VendorID == vendorID)
+				.Select(x => new PurchaseOrderView
+				{
+					Vendor = Vendors
+								.Where(v => v.VendorID == x.VendorID)
+								.Select(v => new VendorView
+								{
+									VendorID = v.VendorID,
+									VendorName = v.VendorName,
+									Phone = v.Phone,
+									Address = v.Address,
+									City = v.City,
+									Province = v.ProvinceID,
+									PostalCode = v.PostalCode
+								}).FirstOrDefault(),
+					PurchaseOrderID = x.PurchaseOrderID,
+					Items = StockItems
+								.Where(i => i.VendorID == x.VendorID)
+								.Select(i => new ItemView
+								{
+									StockItemID = i.StockItemID,
+									Description = i.Description,
+									QOH = i.QuantityOnHand,
+									ROL = i.ReOrderLevel,
+									QOO = i.QuantityOnOrder,
+									QTO = i.ReOrderLevel - i.QuantityOnHand,
+									Price= i.PurchasePrice
+								}).ToList(),
+					SubTotal = x.SubTotal,
+					GST = x.TaxAmount
+				}).FirstOrDefault().Dump();
+}
+ 
+public List<ItemView> FetchInventoryBy(int vendorID)
+{
+	if (vendorID == 0)
+	{
+		throw new ArgumentNullException("Vendor ID is required");
+	}
+ 
+	return StockItems
+		.Where(x => x.VendorID == vendorID)
+		.Select(x => new ItemView
+		{
+			PurchaseOrderDetailID = 0,
+			StockItemID = x.StockItemID,
+			Description = x.Description,
+			QOH = x.QuantityOnHand,
+			ROL = x.ReOrderLevel,
+			QOO = x.QuantityOnOrder,
+			QTO = (x.ReOrderLevel - x.QuantityOnHand),
+			Price = x.SellingPrice
+		}).ToList().Dump();
+}
+ 
+public List<ItemView> FetchInventoryBy(int PurchaseOrderID, int vendorID)
+{	
+	int purchaseOrderID = PurchaseOrders
+							.Where(x => x.PurchaseOrderID == PurchaseOrderID)
+							.Select(x => x.PurchaseOrderID).FirstOrDefault();
+	if (vendorID == 0 || PurchaseOrderID == 0)
+	{
+		throw new ArgumentNullException("Purchase Order and Vendor ID is required");
+	}
+ 
+	return StockItems
+				.Where(x => x.VendorID == vendorID &&
+						PurchaseOrderID == purchaseOrderID)
+				.Select(x => new ItemView
+				{
+					PurchaseOrderDetailID = 0,
+					StockItemID = x.StockItemID,
+					Description = x.Description,
+					QOH = x.QuantityOnHand,
+					ROL = x.ReOrderLevel,
+					QOO = x.QuantityOnOrder,
+					QTO = x.ReOrderLevel - x.QuantityOnHand,
+					Price = x.SellingPrice
+				}).ToList().Dump();
+}
+ 
+public PurchaseOrderView UpdatePurchaseOrder(PurchaseOrderEditView order, bool placeOrder) 
+{
+	List<Exception> errorList = new List<Exception>();
+	var existingOrder = PurchaseOrders
+							.FirstOrDefault(x => x.PurchaseOrderID == order.PurchaseOrderID);
+ 
+	if (existingOrder != null)
+	{
+		existingOrder.PurchaseOrderID = order.PurchaseOrderID;
+		existingOrder.SubTotal = order.SubTotal;
+		existingOrder.TaxAmount = order.GST;
+ 
+		var updatedOrderView = new PurchaseOrderView
+		{
+			PurchaseOrderID = existingOrder.PurchaseOrderID,
+			SubTotal = existingOrder.SubTotal,
+			GST = existingOrder.TaxAmount
+		};
+ 
+		if (placeOrder == true)
+		{
+			SaveChanges();
+		}
+ 
+		return updatedOrderView;
+	}
+	else
+	{
+		errorList.Add(new Exception("Purchase Order is either not available or does not exist."));
+		return null;
+	}
+}
+ 
+public bool DeletePurchaseOrder(int purchaseOrderID)
+{
+	var deletePurchaseOrder = PurchaseOrders	
+								.FirstOrDefault(x => x.PurchaseOrderID == purchaseOrderID);
+ 
+	if (deletePurchaseOrder != null)
+	{
+		PurchaseOrders.Remove(deletePurchaseOrder);
+		Console.WriteLine($"Purchase order #{purchaseOrderID} is deleted from database.");
+		return true;
+	}
+	else
+	{
+		Console.WriteLine($"Purchase order for the given number #{purchaseOrderID} is either unavailable or it does not exist.");
+		return false;
+	}
+}
+ 
+#endregion
+ 
+#region Class/View Model
+ 
+public class VendorView
+{
+	public int VendorID { get; set; }
+	public string VendorName { get; set; }
+	public string Phone { get; set; }
+	public string Address { get; set; }
+	public string City { get; set; }
+	public string Province { get; set; }
+	public string PostalCode { get; set; }
+}
+ 
+public class EmployeeView
+{
+	public int EmployeeID { get; set; }
+	public string FullName { get; set; }
+}
+ 
+public class PurchaseOrderView
+{
+	public VendorView Vendor { get; set; }
+	public int PurchaseOrderID { get; set; }
+	public List<ItemView> Items {get; set; }
+	public decimal SubTotal { get; set; }
+	public decimal GST { get; set;}
+}
+ 
+public class ItemView
+{
+	public int PurchaseOrderDetailID { get; set; }
+	public int StockItemID { get; set; }
+	public string Description { get; set; }
+	public int QOH { get; set; }
+	public int ROL { get; set; }
+	public int QOO { get; set; }
+	public int QTO { get; set; }
+	public decimal Price { get; set; }
+}
+ 
+public class PurchaseOrderEditView
+{
+	public int PurchaseOrderID { get; set; }
+	public int VendorID { get; set; }
+	public int EmployeeID { get; set; }
+	public List<ItemDetailView> ItemDetails { get; set; }
+	public decimal SubTotal { get; set; }
+	public decimal GST { get; set; }
+}
+ 
+public class ItemDetailView
+{
+	public int StockItemID { get; set; }
+	public int QTO { get; set; }
+	public decimal Price { get; set; }
+}
+ 
+#endregion
