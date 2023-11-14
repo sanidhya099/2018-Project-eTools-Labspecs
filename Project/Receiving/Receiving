@@ -257,16 +257,6 @@ public void ForceCloseOrder(string reason, ReceiveOrderView receiving)
 	#endregion
 }
 
-public void AddUnorderedItem(UnorderedReturnItemView item, int? poID)
-{
-
-}
-
-public void RemoveUnorderedItem(int? itemID)
-{
-
-}
-
 public List<UnorderedReturnItemView> GetUnorderedItems()
 {
 	return null;
